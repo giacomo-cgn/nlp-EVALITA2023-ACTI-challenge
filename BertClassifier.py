@@ -116,7 +116,7 @@ def train(model, train_dataloader, optimizer, device='cpu', val_dataloader = Non
             if (step % 20 == 0 and step != 0) or (step == len(train_dataloader) - 1):
 
                 # Print training results
-                print(f"{epoch_i + 1:^7} | {step:^7} | {batch_loss / batch_counts:^12.6f} | {f1_value_train_batch / batch_counts:^9.2f} | {'-':^10} | {'-':^9} | {'-':^9} | {time_elapsed:^9.2f}")
+                print(f"{epoch_i + 1:^7} | {step:^7} | {batch_loss / batch_counts:^12.6f} | {f1_value_train_batch / batch_counts:^9.2f} | {'-':^10} | {'-':^9} | {'-':^9}")
 
                 # Reset batch tracking variables
                 batch_loss, batch_counts, f1_value_train_batch = 0, 0, 0
@@ -135,7 +135,7 @@ def train(model, train_dataloader, optimizer, device='cpu', val_dataloader = Non
             val_loss, val_accuracy, f1_value_validation = evaluate(model, val_dataloader)
 
             
-            print(f"{epoch_i + 1:^7} | {'-':^7} | {avg_train_loss:^12.6f} | {avg_f1_value:^9.2f} | {val_loss:^10.6f} | {val_accuracy:^9.2f} | {f1_value_validation:^9.2f} | {time_elapsed:^9.2f}")
+            print(f"{epoch_i + 1:^7} | {'-':^7} | {avg_train_loss:^12.6f} | {avg_f1_value:^9.2f} | {val_loss:^10.6f} | {val_accuracy:^9.2f} | {f1_value_validation:^9.2f}")
             print("-"*95)
         print("\n")
     
