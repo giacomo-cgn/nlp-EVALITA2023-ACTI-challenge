@@ -1,9 +1,11 @@
 from torch import nn
 import torch
-from sklearn.metrics import f1_score
+from sklearn.metrics import accuracy_score
 from transformers import BertModel
+import transformers
 import tqdm
 import numpy as np
+from utils import f1_score_function
 
 class BertClassifier(nn.Module) :
 
@@ -28,7 +30,6 @@ class BertClassifier(nn.Module) :
                 nn.ReLU(),
                 nn.Dropout(0.3),
                 nn.Linear(32, 2),
-                nn.Softmax()
                 )
         
         #Freezing for fine tuning
@@ -37,7 +38,6 @@ class BertClassifier(nn.Module) :
                 param.requires_grad = False
 
     def forward(self, inputs, mask):
-
         # Feeding the input to Bert
         last_hidden_states = self.bert(input_ids=inputs, attention_mask=mask)
 
@@ -45,101 +45,122 @@ class BertClassifier(nn.Module) :
         bert_cls = last_hidden_states[0][:,0,:]
 
         # Classification layer forward
-        logits = self.head(bert_cls)
+        softmax_preds = self.head(bert_cls)
 
-        # The shape of the logits is #number of sentences * #number of classes
-        return logits
+        # The shape of the softmax_preds is #number of sentences * #number of classes
+        return softmax_preds
 
     def fine_tune(self, enabled = True):
         #Freezing or unfreezing for fine tuning
         for param in self.bert.parameters():
             param.requires_grad = enabled
 
+# Returns initialized model
+def init_bert_clf(tr_steps, lr_rate=3e-5, scheduler_warmp_steps=0):
+    bert_clf = BertClassifier()
 
-def f1_score_function(preds, labels):
-    preds_copy = torch.tensor(preds)
-    #numpy works on cpu, so we ensure that preds and labels are on cpu
-    preds_flat = np.argmax(preds_copy.cpu(), axis=1).flatten()
-    labels_flat = labels.cpu().flatten()
-    return f1_score(labels_flat, preds_flat, average='macro')
-
-
-def train(model, train_dataloader, optimizer, device='cpu', val_dataloader = None, epochs = 5, loss_function = nn.CrossEntropyLoss()):
-
-    for epoch_i in tqdm(range(epochs)):
-        # =======================================
-        #               Training
-        # =======================================
-        # Print the header of the result table
-        print(f"{'Epoch':^7} | {'Batch':^7} | {'Train Loss':^12} | {'F1 Train':^9} | {'Val Loss':^10} | {'Val Acc':^9} | {'F1 Val':^9} | {'Elapsed':^9}")
-        print("-"*95)
-
-        # Reset tracking variables at the beginning of each epoch
-        total_loss, batch_loss, batch_counts, f1_value_train_batch, f1_value_train_tot  = 0, 0, 0, 0, 0
-
-        # Put the model into the training mode
-        model.train()
-
-        # For each batch of training data...
-        for step, batch in enumerate(train_dataloader):
-            batch_counts +=1
-            # Load batch to GPU
-            b_input_ids, b_attn_mask, b_labels = tuple(t.to(device) for t in batch)
-
-            # Zero out any previously calculated gradients
-            model.zero_grad()
-
-            # Perform a forward pass. This will return logits.
-            logits = model(b_input_ids, b_attn_mask)
-
-            # Compute loss and accumulate the loss values
-            #b_labels = b_labels *1.0
-            #b_labels = b_labels.unsqueeze(1)
-
-            loss = loss_function(logits, b_labels)
-            batch_loss += loss.item()
-            total_loss += loss.item()
-
-            f1_value_train_batch+= f1_score_function(logits, b_labels) 
-            f1_value_train_tot+= f1_score_function(logits, b_labels) 
-
-            # Perform a backward pass to calculate gradients
-            loss.backward()
-
-            # Clip the norm of the gradients to 1.0 to prevent "exploding gradients"
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-
-            # Update parameters
-            optimizer.step()
-
-            # Print the loss values and time elapsed for every 20 batches
-            if (step % 20 == 0 and step != 0) or (step == len(train_dataloader) - 1):
-
-                # Print training results
-                print(f"{epoch_i + 1:^7} | {step:^7} | {batch_loss / batch_counts:^12.6f} | {f1_value_train_batch / batch_counts:^9.2f} | {'-':^10} | {'-':^9} | {'-':^9}")
-
-                # Reset batch tracking variables
-                batch_loss, batch_counts, f1_value_train_batch = 0, 0, 0
-
-        # Calculate the average loss over the entire training data
-        avg_train_loss = total_loss / len(train_dataloader)
-        avg_f1_value = f1_value_train_tot / len(train_dataloader)
-
-        print("-"*95)
-        # =======================================
-        #               Evaluation
-        # =======================================
-        if val_dataloader != None:
-            # After the completion of each training epoch, measure the model's performance
-            # on our validation set.
-            val_loss, val_accuracy, f1_value_validation = evaluate(model, val_dataloader)
-
-            
-            print(f"{epoch_i + 1:^7} | {'-':^7} | {avg_train_loss:^12.6f} | {avg_f1_value:^9.2f} | {val_loss:^10.6f} | {val_accuracy:^9.2f} | {f1_value_validation:^9.2f}")
-            print("-"*95)
-        print("\n")
+    loss_function = torch.nn.CrossEntropyLoss()
+    optimizer = transformers.AdamW(params = bert_clf.parameters(), lr=lr_rate, correct_bias=False)
+    scheduler = transformers.get_cosine_schedule_with_warmup(optimizer=optimizer, num_training_steps=tr_steps, num_warmup_steps=scheduler_warmp_steps # TO DECIDE
+                                                             )
     
-    print("Training complete!")
+    if torch.cuda.is_available():       
+        device = torch.device("cuda")
+        print(f'There are {torch.cuda.device_count()} GPU(s) available.')
+        print('Device name:', torch.cuda.get_device_name(0))
 
-def evaluate():
-    pass
+    else:
+        print('No GPU available, using the CPU instead.')
+        device = torch.device("cpu")
+
+    return bert_clf, loss_function, optimizer, scheduler, device
+
+
+
+
+# Train Bert classifier for 1 epoch
+def train_bert_clf(model, tr_dataloader, loss_function, optimizer, scheduler, device='cpu'):
+    # Put the model into training mode
+    model.train()
+
+    loss_total = 0
+    predictions, labels = []
+
+    for step, batch in enumerate(tr_dataloader):
+        # Load batch to GPU
+        b_input_ids, b_attn_mask, b_labels = tuple(t.to(device) for t in batch)
+
+        # Zero out any previously calculated gradients
+        model.zero_grad()
+
+        # Perform a forward pass
+        raw_preds = model(b_input_ids, b_attn_mask)
+
+        loss = loss_function(raw_preds, b_labels)
+        loss_total += loss.item()
+
+        # Discretize classes
+        _, b_preds = torch.max(raw_preds, dim=1)
+
+        # Perform a backward pass to calculate gradients
+        loss.backward()
+
+        # Clip the norm of the gradients to 1.0 to prevent "exploding gradients"
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+
+        # Update optimizer and scheduler
+        optimizer.step()
+        scheduler.step()
+
+        # Move preds and labels to CPU
+        b_preds = b_preds.detach().cpu().numpy()
+        b_labels = b_labels.to('cpu').numpy()
+        
+        # Store predictions and true labels
+        predictions.append(b_preds)
+        labels.append(b_labels)
+
+    # Calculate scores and avg loss
+    acc_score = accuracy_score(labels, predictions)
+    f1_score = f1_score_function(labels, predictions)
+    avg_epoch_loss_tr = loss_total / len(tr_dataloader)  
+
+    return avg_epoch_loss_tr, acc_score, f1_score, model, optimizer, scheduler
+
+
+
+# Evaluate
+def eval_bert_clf(model, eval_dataloader, loss_function, device='cpu'):
+    # Put model into evaluation mode
+    model.eval()
+
+    loss_total = 0
+    predictions, labels = [], []
+
+    with torch.no_grad():
+        for step, batch in enumerate(eval_dataloader):
+            b_input_ids, b_attn_mask, b_labels = tuple(t.to(device) for t in batch)
+            
+            # Perform a forward pass
+            raw_preds = model(b_input_ids, b_attn_mask)
+
+            loss = loss_function(raw_preds, b_labels)
+            loss_total += loss.item()
+            
+            # Discretize classes
+            _, b_preds = torch.max(raw_preds, dim=1)
+
+            # Move preds and labels to CPU
+            b_preds = b_preds.detach().cpu().numpy()
+            b_labels = b_labels.to('cpu').numpy()
+            
+            # Store predictions and true labels
+            predictions.append(b_preds)
+            labels.append(b_labels)
+
+    # Calculate scores and avg loss
+    acc_score = accuracy_score(labels, predictions)
+    f1_score = f1_score_function(labels, predictions)
+    avg_epoch_loss_eval = loss_total / len(eval_dataloader)
+
+    return avg_epoch_loss_eval, acc_score, f1_score, predictions, labels
