@@ -26,10 +26,8 @@ class BertClassifier(nn.Module) :
                 nn.Linear(768, 128),
                 nn.ReLU(),
                 nn.Dropout(0.3),
-                nn.Linear(128, 32),
-                nn.ReLU(),
-                nn.Dropout(0.3),
-                nn.Linear(32, 2),
+      
+                nn.Linear(128, 2),
                 )
         
         #Freezing for fine tuning
@@ -56,13 +54,15 @@ class BertClassifier(nn.Module) :
             param.requires_grad = enabled
 
 # Returns initialized model
-def init_bert_clf(tr_steps, lr_rate=3e-5, scheduler_warmp_steps=0):
+def init_bert_clf(tr_steps, lr_rate=1e-5, scheduler_warmp_steps=None):
     bert_clf = BertClassifier()
+
+    if scheduler_warmp_steps == None:
+        scheduler_warmp_steps = int(tr_steps/10)
 
     loss_function = torch.nn.CrossEntropyLoss()
     optimizer = transformers.AdamW(params = bert_clf.parameters(), lr=lr_rate, correct_bias=False)
-    scheduler = transformers.get_cosine_schedule_with_warmup(optimizer=optimizer, num_training_steps=tr_steps, num_warmup_steps=scheduler_warmp_steps # TO DECIDE
-                                                             )
+    scheduler = transformers.get_cosine_schedule_with_warmup(optimizer=optimizer, num_training_steps=tr_steps, num_warmup_steps=scheduler_warmp_steps)
     
     if torch.cuda.is_available():       
         device = torch.device("cuda")
@@ -80,15 +80,19 @@ def init_bert_clf(tr_steps, lr_rate=3e-5, scheduler_warmp_steps=0):
 
 # Train Bert classifier for 1 epoch
 def train_bert_clf(model, tr_dataloader, loss_function, optimizer, scheduler, device='cpu'):
+    model.to(device)
+
     # Put the model into training mode
     model.train()
 
     loss_total = 0
-    predictions, labels = []
+    predictions, labels = [], []
 
     for step, batch in enumerate(tr_dataloader):
         # Load batch to GPU
-        b_input_ids, b_attn_mask, b_labels = tuple(t.to(device) for t in batch)
+        b_input_ids = batch[0].to(device)
+        b_attn_mask = batch[1].to(device)
+        b_labels = batch[2].to(device)
 
         # Zero out any previously calculated gradients
         model.zero_grad()
@@ -113,12 +117,12 @@ def train_bert_clf(model, tr_dataloader, loss_function, optimizer, scheduler, de
         scheduler.step()
 
         # Move preds and labels to CPU
-        b_preds = b_preds.detach().cpu().numpy()
-        b_labels = b_labels.to('cpu').numpy()
+        b_preds = b_preds.detach().cpu().tolist()
+        b_labels = b_labels.detach().cpu().tolist()
         
         # Store predictions and true labels
-        predictions.append(b_preds)
-        labels.append(b_labels)
+        predictions += b_preds
+        labels += b_labels
 
     # Calculate scores and avg loss
     acc_score = accuracy_score(labels, predictions)
@@ -151,12 +155,12 @@ def eval_bert_clf(model, eval_dataloader, loss_function, device='cpu'):
             _, b_preds = torch.max(raw_preds, dim=1)
 
             # Move preds and labels to CPU
-            b_preds = b_preds.detach().cpu().numpy()
-            b_labels = b_labels.to('cpu').numpy()
+            b_preds = b_preds.detach().cpu().tolist()
+            b_labels = b_labels.detach().cpu().tolist()
             
             # Store predictions and true labels
-            predictions.append(b_preds)
-            labels.append(b_labels)
+            predictions += b_preds
+            labels += b_labels
 
     # Calculate scores and avg loss
     acc_score = accuracy_score(labels, predictions)
