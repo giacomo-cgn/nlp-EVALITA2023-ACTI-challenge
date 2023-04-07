@@ -9,7 +9,7 @@ from utils import f1_score_function
 
 class BertClassifier(nn.Module) :
 
-    def __init__(self, bert_path = 'm-polignano-uniba/bert_uncased_L-12_H-768_A-12_italian_alb3rt0', fine_tune = True, head = None):
+    def __init__(self, bert_path = 'dbmdz/bert-base-italian-xxl-cased', fine_tune = True, head = None):
         
         super(BertClassifier, self).__init__()
 
@@ -54,8 +54,8 @@ class BertClassifier(nn.Module) :
             param.requires_grad = enabled
 
 # Returns initialized model
-def init_bert_clf(tr_steps, lr_rate=1e-5, scheduler_warmp_steps=None):
-    bert_clf = BertClassifier()
+def init_bert_clf(tr_steps, lr_rate=1e-5, scheduler_warmp_steps=None, head=None):
+    bert_clf = BertClassifier(head=head)
 
     if scheduler_warmp_steps == None:
         scheduler_warmp_steps = int(tr_steps/10)
