@@ -53,6 +53,7 @@ class BertClassifier(nn.Module) :
         for param in self.bert.parameters():
             param.requires_grad = enabled
 
+
 # Returns initialized model
 def init_bert_clf(tr_steps, lr_rate=1e-5, scheduler_warmp_steps=None, head=None):
     bert_clf = BertClassifier(head=head)
@@ -64,16 +65,8 @@ def init_bert_clf(tr_steps, lr_rate=1e-5, scheduler_warmp_steps=None, head=None)
     optimizer = transformers.AdamW(params = bert_clf.parameters(), lr=lr_rate, correct_bias=False)
     scheduler = transformers.get_cosine_schedule_with_warmup(optimizer=optimizer, num_training_steps=tr_steps, num_warmup_steps=scheduler_warmp_steps)
     
-    if torch.cuda.is_available():       
-        device = torch.device("cuda")
-        print(f'There are {torch.cuda.device_count()} GPU(s) available.')
-        print('Device name:', torch.cuda.get_device_name(0))
-
-    else:
-        print('No GPU available, using the CPU instead.')
-        device = torch.device("cpu")
-
-    return bert_clf, loss_function, optimizer, scheduler, device
+    
+    return bert_clf, loss_function, optimizer, scheduler
 
 
 
@@ -168,3 +161,29 @@ def eval_bert_clf(model, eval_dataloader, loss_function, device='cpu'):
     avg_epoch_loss_eval = loss_total / len(eval_dataloader)
 
     return avg_epoch_loss_eval, acc_score, f1_score, predictions, labels
+
+
+# Test model (same to eval, but without labels)
+def test_bert_clf(model, test_dataloader, device='cpu'):
+    # Put model into evaluation mode
+    model.eval()
+
+    predictions, raw = [], []
+
+    with torch.no_grad():
+        for step, batch in enumerate(test_dataloader):
+            b_input_ids, b_attn_mask = tuple(t.to(device) for t in batch)
+            
+            # Perform a forward pass
+            raw_preds = model(b_input_ids, b_attn_mask)
+
+            # Discretize classes
+            _, b_preds = torch.max(raw_preds, dim=1)
+
+            # Move preds to CPU
+            b_preds = b_preds.detach().cpu().tolist()
+            
+            # Store predictions
+            predictions += b_preds
+
+    return predictions
