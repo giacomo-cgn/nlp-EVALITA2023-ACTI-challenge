@@ -3,6 +3,7 @@ import torch
 from transformers import RobertaModel
 import transformers
 import numpy as np
+from torch.optim import AdamW
 
 class RoBertaClassifier(nn.Module) :
 
@@ -20,7 +21,7 @@ class RoBertaClassifier(nn.Module) :
         #If the classifier is not valid, set a default classifier
         else:
             self.head = nn.Sequential(
-                nn.Linear(768, 128),
+                nn.Linear(1024, 128),
                 nn.ReLU(),
                 nn.Dropout(0.3),
       
@@ -59,7 +60,7 @@ def init_roberta_clf(tr_steps, lr_rate=1e-5, scheduler_warmp_steps=None, head=No
         scheduler_warmp_steps = int(tr_steps/10)
 
     loss_function = torch.nn.CrossEntropyLoss()
-    optimizer = transformers.AdamW(params = roberta_clf.parameters(), lr=lr_rate, correct_bias=False)
+    optimizer = AdamW(params = roberta_clf.parameters(), lr=lr_rate)
     scheduler = transformers.get_cosine_schedule_with_warmup(optimizer=optimizer, num_training_steps=tr_steps, num_warmup_steps=scheduler_warmp_steps)
     
     
