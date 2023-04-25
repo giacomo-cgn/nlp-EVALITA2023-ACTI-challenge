@@ -1,6 +1,6 @@
 from torch import nn
 import torch
-from transformers import RobertaModel
+from transformers import XLMRobertaModel
 import transformers
 import numpy as np
 from torch.optim import AdamW
@@ -12,7 +12,7 @@ class RoBertaClassifier(nn.Module) :
         super(RoBertaClassifier, self).__init__()
 
         #BERT initialization
-        self.roberta = RobertaModel.from_pretrained(roberta_path)
+        self.roberta = XLMRobertaModel.from_pretrained(roberta_path)
 
         #Classifier initialization
         if head is not None and head._modules['0'].in_features == 768:
