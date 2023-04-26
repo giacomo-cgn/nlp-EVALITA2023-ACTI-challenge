@@ -2,5 +2,7 @@
 */__pycache__
 /subtaskA/checkpoints_bert_retrain_subtaskA/
 /subtaskA/checkpoints_bert_subtaskA/
+/subtaskA/checkpoints_roberta_subtaskA/
 /subtaskB/checkpoints_bert_retrain_subtaskB/
 /subtaskB/checkpoints_bert_subtaskB/
+/subtaskB/checkpoints_roberta_subtaskA/
