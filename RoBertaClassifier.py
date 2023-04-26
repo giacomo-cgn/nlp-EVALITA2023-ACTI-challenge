@@ -15,7 +15,7 @@ class RoBertaClassifier(nn.Module) :
         self.roberta = XLMRobertaModel.from_pretrained(roberta_path)
 
         #Classifier initialization
-        if head is not None and head._modules['0'].in_features == 768:
+        if head is not None and head._modules['0'].in_features == 1024:
             self.head = head
         
         #If the classifier is not valid, set a default classifier
