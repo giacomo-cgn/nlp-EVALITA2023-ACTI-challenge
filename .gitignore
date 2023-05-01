@@ -7,3 +7,5 @@
 /subtaskB/checkpoints_bert_subtaskB/
 /subtaskB/checkpoints_roberta_subtaskB/
 /subtaskA/final_roberta_submission(old).csv
+/subtaskA/checkpoints_llama_subtaskA
+/subtaskB/checkpoints_llama_subtaskB
