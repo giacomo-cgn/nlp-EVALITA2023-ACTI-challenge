@@ -5,7 +5,7 @@ The ACTI challenge is an Italian NLP challenge about recognizing Conspiracy theo
 - **[SubtaskA](https://www.kaggle.com/competitions/acti-subtask-a) - Conspiratorial Content Classification:** the model must recognize if the message contains conspiratorial theories or not.
 - **[SubtaskB](https://www.kaggle.com/competitions/acti-subtask-b) - Conspiracy Category Classification:** the model must discriminate to which conspiracy theory a message belongs from 4 possible conspiracy topics (Covid, Qanon, Flat Earth, Pro-Russia).
 
-The published paper will soon be published.
+The paper will soon be published.
 
 ## Models
 The following model are compared to solve both subtasks:
